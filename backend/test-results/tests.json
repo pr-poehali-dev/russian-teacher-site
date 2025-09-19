@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Get progress data",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "progress": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Save test result",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "studentName": "Тест Студент",
+        "testId": 1,
+        "answers": ["2", "0"],
+        "score": 100
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "success": true,
+        "resultId": "number",
+        "message": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

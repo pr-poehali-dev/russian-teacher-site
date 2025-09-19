@@ -1,54 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 
 function Index() {
   const [currentTest, setCurrentTest] = useState<number | null>(null);
   const [testAnswers, setTestAnswers] = useState<{ [key: number]: string }>({});
   const [testResults, setTestResults] = useState<{ [key: number]: number }>({});
+  const [studentName, setStudentName] = useState<string>('');
+  const [showNameInput, setShowNameInput] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [progressData, setProgressData] = useState<any[]>([]);
+  const [testsFromDB, setTestsFromDB] = useState<any[]>([]);
 
-  const tests = [
-    {
-      id: 1,
-      title: "Падежи русского языка",
-      description: "Проверьте знание падежей и их окончаний",
-      questions: [
+  // Загрузка тестов и прогресса при загрузке компонента
+  useEffect(() => {
+    loadProgressData();
+    loadTests();
+  }, []);
+
+  const loadTests = async () => {
+    try {
+      const response = await fetch('https://functions.poehali.dev/dfdccbc9-b672-47f3-994e-04d9e884e4ac');
+      if (response.ok) {
+        const data = await response.json();
+        setTestsFromDB(data.tests || []);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки тестов:', error);
+      // Используем тестовые данные при ошибке
+      setTestsFromDB([
         {
-          question: "В каком падеже стоит слово 'дому' в предложении 'Я иду к дому'?",
-          options: ["Именительный", "Родительный", "Дательный", "Винительный"],
-          correct: 2
+          id: 1,
+          title: "Падежи русского языка",
+          description: "Проверьте знание падежей и их окончаний",
+          questions: [
+            {
+              question: "В каком падеже стоит слово 'дому' в предложении 'Я иду к дому'?",
+              options: ["Именительный", "Родительный", "Дательный", "Винительный"],
+              correct: 2
+            },
+            {
+              question: "Какое окончание у слова 'стол' в творительном падеже?",
+              options: ["-ом", "-ам", "-е", "-ы"],
+              correct: 0
+            }
+          ]
         },
         {
-          question: "Какое окончание у слова 'стол' в творительном падеже?",
-          options: ["-ом", "-ам", "-е", "-ы"],
-          correct: 0
+          id: 2,
+          title: "Орфография",
+          description: "Тест на правописание сложных слов",
+          questions: [
+            {
+              question: "Как правильно написать слово?",
+              options: ["Преподаватель", "Приподаватель", "Преподователь", "Приподователь"],
+              correct: 0
+            }
+          ]
         }
-      ]
-    },
-    {
-      id: 2,
-      title: "Орфография",
-      description: "Тест на правописание сложных слов",
-      questions: [
-        {
-          question: "Как правильно написать слово?",
-          options: ["Преподаватель", "Приподаватель", "Преподователь", "Приподователь"],
-          correct: 0
-        }
-      ]
+      ]);
     }
-  ];
+  };
 
-  const progressData = [
-    { student: "Анна Петрова", tests: 8, average: 92 },
-    { student: "Иван Сидоров", tests: 6, average: 78 },
-    { student: "Мария Козлова", tests: 10, average: 95 },
-    { student: "Алексей Волков", tests: 4, average: 65 }
-  ];
+  const loadProgressData = async () => {
+    try {
+      const response = await fetch('https://functions.poehali.dev/55f97e4c-2c5f-4fad-8465-d1583ee02922');
+      if (response.ok) {
+        const data = await response.json();
+        setProgressData(data.progress || []);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки прогресса:', error);
+      // Используем тестовые данные при ошибке
+      setProgressData([
+        { student: "Анна Петрова", tests: 8, average: 92 },
+        { student: "Иван Сидоров", tests: 6, average: 78 },
+        { student: "Мария Козлова", tests: 10, average: 95 },
+        { student: "Алексей Волков", tests: 4, average: 65 }
+      ]);
+    }
+  };
 
   const handleAnswerSelect = (questionIndex: number, answerIndex: number) => {
     if (currentTest !== null) {
@@ -59,19 +96,65 @@ function Index() {
     }
   };
 
-  const submitTest = () => {
-    if (currentTest !== null) {
-      const test = tests[currentTest];
+  const submitTest = async () => {
+    if (currentTest !== null && studentName.trim()) {
+      setIsLoading(true);
+      const test = testsFromDB[currentTest];
       let correct = 0;
-      test.questions.forEach((q, index) => {
+      test.questions.forEach((q: any, index: number) => {
         if (testAnswers[index] === q.correct.toString()) {
           correct++;
         }
       });
       const score = Math.round((correct / test.questions.length) * 100);
-      setTestResults(prev => ({ ...prev, [currentTest]: score }));
+      
+      try {
+        // Сохраняем результат в базу данных
+        const response = await fetch('https://functions.poehali.dev/55f97e4c-2c5f-4fad-8465-d1583ee02922', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            studentName: studentName.trim(),
+            testId: test.id,
+            answers: Object.values(testAnswers),
+            score: score
+          })
+        });
+        
+        if (response.ok) {
+          // Обновляем локальное состояние
+          setTestResults(prev => ({ ...prev, [currentTest]: score }));
+          // Перезагружаем данные прогресса
+          await loadProgressData();
+        } else {
+          console.error('Ошибка сохранения результата');
+          // Все равно показываем результат локально
+          setTestResults(prev => ({ ...prev, [currentTest]: score }));
+        }
+      } catch (error) {
+        console.error('Ошибка отправки результата:', error);
+        // Все равно показываем результат локально
+        setTestResults(prev => ({ ...prev, [currentTest]: score }));
+      }
+      
       setCurrentTest(null);
       setTestAnswers({});
+      setShowNameInput(false);
+      setIsLoading(false);
+    } else if (!studentName.trim()) {
+      setShowNameInput(true);
+    }
+  };
+
+  const startTest = (testIndex: number) => {
+    if (!studentName.trim()) {
+      setShowNameInput(true);
+      setCurrentTest(testIndex);
+    } else {
+      setCurrentTest(testIndex);
+      setShowNameInput(false);
     }
   };
 
@@ -183,6 +266,46 @@ function Index() {
 
           {/* Tests Section */}
           <TabsContent value="tests" className="space-y-6">
+            {showNameInput && (
+              <Card className="border-warm-beige/50 shadow-lg rounded-2xl">
+                <CardHeader>
+                  <CardTitle className="font-montserrat">Введите ваше имя</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="studentName">Ваше имя</Label>
+                    <Input
+                      id="studentName"
+                      value={studentName}
+                      onChange={(e) => setStudentName(e.target.value)}
+                      placeholder="Введите ваше имя"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setShowNameInput(false)}
+                      className="rounded-xl"
+                    >
+                      Отменить
+                    </Button>
+                    <Button 
+                      onClick={() => {
+                        if (studentName.trim() && currentTest !== null) {
+                          setShowNameInput(false);
+                        }
+                      }}
+                      disabled={!studentName.trim()}
+                      className="bg-warm-brown hover:bg-warm-brown/90 text-white rounded-xl"
+                    >
+                      Продолжить
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             {currentTest === null ? (
               <>
                 <div className="text-center mb-8">
@@ -192,14 +315,14 @@ function Index() {
                   <p className="text-slate-dark/80">Проверьте свои знания русского языка</p>
                 </div>
                 <div className="grid md:grid-cols-2 gap-6">
-                  {tests.map((test) => (
+                  {testsFromDB.map((test, index) => (
                     <Card key={test.id} className="border-warm-beige/50 shadow-lg rounded-2xl hover:shadow-xl transition-shadow">
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between">
                           <span className="font-montserrat">{test.title}</span>
-                          {testResults[tests.indexOf(test)] && (
+                          {testResults[index] && (
                             <Badge className="bg-sky-blue text-slate-dark">
-                              {testResults[tests.indexOf(test)]}%
+                              {testResults[index]}%
                             </Badge>
                           )}
                         </CardTitle>
@@ -208,10 +331,10 @@ function Index() {
                       <CardContent>
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-slate-dark/60">
-                            {test.questions.length} вопросов
+                            {test.questions?.length || 0} вопросов
                           </span>
                           <Button 
-                            onClick={() => setCurrentTest(tests.indexOf(test))}
+                            onClick={() => startTest(index)}
                             className="bg-warm-brown hover:bg-warm-brown/90 text-white rounded-xl"
                           >
                             Начать тест
@@ -225,17 +348,17 @@ function Index() {
             ) : (
               <Card className="border-warm-beige/50 shadow-lg rounded-2xl">
                 <CardHeader>
-                  <CardTitle className="font-montserrat">{tests[currentTest].title}</CardTitle>
-                  <Progress value={(Object.keys(testAnswers).length / tests[currentTest].questions.length) * 100} />
+                  <CardTitle className="font-montserrat">{testsFromDB[currentTest]?.title}</CardTitle>
+                  <Progress value={(Object.keys(testAnswers).length / (testsFromDB[currentTest]?.questions?.length || 1)) * 100} />
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {tests[currentTest].questions.map((question, qIndex) => (
+                  {testsFromDB[currentTest]?.questions?.map((question: any, qIndex: number) => (
                     <div key={qIndex} className="space-y-4">
                       <h4 className="font-montserrat font-semibold text-slate-dark">
                         {qIndex + 1}. {question.question}
                       </h4>
                       <div className="grid gap-2">
-                        {question.options.map((option, oIndex) => (
+                        {question.options?.map((option: string, oIndex: number) => (
                           <Button
                             key={oIndex}
                             variant={testAnswers[qIndex] === oIndex.toString() ? "default" : "outline"}
@@ -251,17 +374,20 @@ function Index() {
                   <div className="flex gap-4">
                     <Button 
                       variant="outline" 
-                      onClick={() => setCurrentTest(null)}
+                      onClick={() => {
+                        setCurrentTest(null);
+                        setTestAnswers({});
+                      }}
                       className="rounded-xl"
                     >
                       Отменить
                     </Button>
                     <Button 
                       onClick={submitTest}
-                      disabled={Object.keys(testAnswers).length !== tests[currentTest].questions.length}
+                      disabled={isLoading || Object.keys(testAnswers).length !== (testsFromDB[currentTest]?.questions?.length || 0)}
                       className="bg-warm-brown hover:bg-warm-brown/90 text-white rounded-xl"
                     >
-                      Завершить тест
+                      {isLoading ? 'Сохранение...' : 'Завершить тест'}
                     </Button>
                   </div>
                 </CardContent>
